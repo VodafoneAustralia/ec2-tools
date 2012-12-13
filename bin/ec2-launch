@@ -5,7 +5,7 @@ LAUNCH_FILE=/tmp/ec2_launch.out
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
 usage() {
-  echo "Usage: ec2 run [ -g GROUP,... ]] AMI HOSTNAME"
+  echo "Usage: ec2 run -k KEY_PAIR [ -g GROUP,... ]] AMI HOSTNAME"
 }
 
 write_userdata() {
@@ -27,7 +27,7 @@ launch_instance() {
   ec2_command="ec2-run-instances $ami \
     -t m1.large \
     -b /dev/sda1=:100 \
-    -k psn-production \
+    -k $key_pair \
     -f $USERDATA_FILE"
 
   groups=$(echo $groups | tr , " ")
@@ -57,11 +57,15 @@ wait_for_instance_address() {
 
 if [ $# == 0 ]; then usage; exit 1; fi
 
-while getopts "g:" opt; do
+while getopts "k:g:" opt; do
     case $opt in
       h)
         usage
         exit 0
+        ;;
+      k)
+        key_pair=$OPTARG
+        shift 2
         ;;
       g)
         groups=$OPTARG
@@ -74,6 +78,7 @@ while getopts "g:" opt; do
     esac
 done
 
+if [ -z $key_pair ]; then usage; exit 1; fi
 if [ $# != 2 ]; then usage; exit 1; fi
 
 ami=$1
