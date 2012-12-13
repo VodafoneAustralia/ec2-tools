@@ -5,7 +5,7 @@ LAUNCH_FILE=/tmp/ec2_launch.out
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
 usage() {
-  echo "Usage: ec2 run [ -g GROUP,... ]] AMI FQDN"
+  echo "Usage: ec2 run [ -g GROUP,... ]] AMI HOSTNAME"
 }
 
 write_userdata() {
@@ -18,7 +18,7 @@ cat <<-EOF > $USERDATA_FILE
   echo "$hostname" > /etc/hostname
 
   awk '!/127\.0\.0\.1|127\.0\.1\.1/' /etc/hosts > /tmp/hosts
-  echo "127.0.0.1 $hostname $fqdn" > /etc/hosts
+  echo "127.0.0.1 $hostname $hostname" > /etc/hosts
   cat /tmp/hosts >> /etc/hosts
 EOF
 }
@@ -39,10 +39,6 @@ launch_instance() {
   ec2_instance_id=$(awk '/INSTANCE/ { print $2 }' $LAUNCH_FILE)
 }
 
-tag_instance() {
-  ec2-create-tags $ec2_instance_id --tag "Name=$fqdn"
-}
-
 wait_for_instance_address() {
   set +e
   pending=1
@@ -59,21 +55,21 @@ wait_for_instance_address() {
   ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
 }
 
-create_rrset() {
-  $(dirname $0)/route53-create -t CNAME ${fqdn}. $ec2_hostname
-}
-
 if [ $# == 0 ]; then usage; exit 1; fi
 
 while getopts "g:" opt; do
     case $opt in
+      h)
+        usage
+        exit 0
+        ;;
       g)
         groups=$OPTARG
         shift 2
         ;;
       \?)
         usage
-        exit 3
+        exit 1
         ;;
     esac
 done
@@ -81,22 +77,21 @@ done
 if [ $# != 2 ]; then usage; exit 1; fi
 
 ami=$1
-fqdn=$2
-hostname=$(echo $fqdn | cut -f 1 -d .)
+hostname=$2
+hostname=$(echo $hostname | cut -f 1 -d .)
 
 write_userdata
 
-echo "Launching instance with hostname $fqdn from AMI $ami"
+echo "Launching instance with hostname $hostname from AMI $ami"
 
 launch_instance
 
 echo "EC2 Instance ID: $ec2_instance_id"
 
-tag_instance
 wait_for_instance_address
 
 echo "EC2 IP Address: $ec2_ip_address"
 echo "EC2 Hostname: $ec2_hostname"
-echo "PSN Hostname: $fqdn"
+echo "PSN Hostname: $hostname"
 
-create_rrset
+$(dirname $0)/ec2-name -d $ec2_instance_id $ec2_hostname

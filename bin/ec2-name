@@ -3,34 +3,48 @@
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
 usage() {
-  echo "Usage: ec2 name [ -d ] INSTANCE_ID FQDN"
+  echo "Usage: ec2 name [ -d ] INSTANCE_ID [ HOSTNAME ]"
 }
 
 create_dns=0
 
 while getopts "d" opt; do
     case $opt in
+      h)
+        usage
+        exit 0
+        ;;
       d)
         create_dns=1
         shift
         ;;
       \?)
         usage
-        exit 3
+        exit 1
         ;;
     esac
 done
 
-if [ $# != 2 ]; then usage; exit 3; fi
+if [ $# == 0 ]; then usage; exit 1; fi
 
 instance_id=$1
-fqdn=$2
-
-ec2-create-tags $instance_id --tag "Name=$fqdn"
 
 ec2-describe-instances $instance_id > $DESCRIBE_FILE
 ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
+tag_hostname=$(awk '/^TAG.*Name.*$/ { print $5 }' $DESCRIBE_FILE)
+
+if [ $# == 1 ]; then
+  if [ -z $tag_hostname ]; then
+    echo "Instance $instance_id has no 'Name' tag"
+    exit 2
+  fi
+  hostname=$tag_hostname
+else
+  hostname=$2
+fi
+
+ec2-create-tags $instance_id --tag "Name=$hostname"
 
 if [ "$create_dns" == "1" ]; then
-  $(dirname $0)/route53-create -t CNAME ${fqdn}. $ec2_hostname
+  $(dirname $0)/route53-create -t CNAME ${hostname}. $ec2_hostname
 fi
