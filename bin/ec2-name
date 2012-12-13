@@ -19,7 +19,7 @@
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
 usage() {
-  echo "Usage: ec2 name [ -d ] INSTANCE_ID [ HOSTNAME ]"
+  echo "Usage: $0 [ -d ] INSTANCE_ID [ HOSTNAME ]"
 }
 
 create_dns=0

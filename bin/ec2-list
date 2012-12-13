@@ -17,23 +17,22 @@
 # DEALINGS IN THE SOFTWARE.
 
 DESCRIBE_FILE=/tmp/ec2_describe.out
+RESULT_FILE=/tmp/ec2_result.out
 CODE_RUNNING=16
 
 usage() {
-  echo "Usage: ec2 list [ -r ] [ PATTERN ]"
+  echo "Usage: $0 [ -s STATE ] [ PATTERN ]"
 }
 
-running=0
-
-while getopts "hr" opt; do
+while getopts "hs:" opt; do
     case $opt in
       h)
         usage
         exit 0
         ;;
-      r)
-        running=1
-        shift
+      s)
+        state=$OPTARG
+        shift 2
         ;;
       \?)
         usage
@@ -49,9 +48,16 @@ else
 fi
 
 DESCRIBE_CMD=ec2-describe-instances
-if [ "$running" == "1" ]; then
-   DESCRIBE_CMD="$DESCRIBE_CMD --filter instance-state-code=$CODE_RUNNING"
+if [ -n "$state" ]; then
+   DESCRIBE_CMD="$DESCRIBE_CMD --filter instance-state-code=$state"
 fi
 
 $DESCRIBE_CMD > $DESCRIBE_FILE
-awk '/^TAG.*Name\t'"$PATTERN"'$/ { print $3, $5 }' $DESCRIBE_FILE
+awk '/^TAG.*Name\t'"$PATTERN"'$/ { print $3, $5 }' $DESCRIBE_FILE > $RESULT_FILE
+
+cat $RESULT_FILE
+if [ $(wc -l $RESULT_FILE | awk '{ print $1 }') != 0 ]; then
+  exit 0
+else
+  exit 2
+fi

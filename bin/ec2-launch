@@ -21,7 +21,7 @@ LAUNCH_FILE=/tmp/ec2_launch.out
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
 usage() {
-  echo "Usage: ec2 run -k KEY_PAIR [ -g GROUP,... ]] AMI HOSTNAME"
+  echo "Usage: $0 -k KEY_PAIR [ -g GROUP,... ]] AMI HOSTNAME"
 }
 
 write_userdata() {
