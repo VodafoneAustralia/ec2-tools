@@ -31,15 +31,14 @@ while getopts "d" opt; do
         exit 0
         ;;
       d)
-        create_dns=1
-        shift
-        ;;
+        create_dns=1;;
       \?)
         usage
         exit 1
         ;;
     esac
 done
+shift $((OPTIND - 1))
 
 if [ $# == 0 ]; then usage; exit 1; fi
 
