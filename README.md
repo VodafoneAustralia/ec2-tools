@@ -1,6 +1,8 @@
 # Summary
 
-A bunch of wrapper scripts for the Amazon EC2 API command line tools, which are intended to support a simple workflow.
+A simple hostname-centric scripting interface to Amazon EC2.
+
+Mostly wrapping the Amazon EC2 API command line tools, these scripts support a simple workflow for managing EC2 instances by hostname.  They're intended primarily for automation of EC2 from build systems, but can be used by fleshy beings as well.
 
 The basic idea is that you want to bring up one or more EC2 instances, tag each one with a fully qualified hostname and then configure Route53 DNS to point that name to the associated host.
 
@@ -35,4 +37,22 @@ Amazon identifiers and credentials are expected to be set in the environment.  H
   
     # The name of the Route 53 zone you wish to contain your DNS records, e.g. example.com
     export ROUTE53_ZONE_NAME=example.com
+
+# License
+
+Copyright (c) 2012 DiUS Computing Pty Ltd
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial 
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
