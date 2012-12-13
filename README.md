@@ -2,9 +2,9 @@
 
 A bunch of wrapper scripts for the Amazon EC2 API command line tools, which are intended to support a simple workflow.
 
-The basic idea is that you want to bring up one or more EC2 instances, tag each one with a FQDN and then configure Route53 DNS to point that name to the associated host.
+The basic idea is that you want to bring up one or more EC2 instances, tag each one with a fully qualified hostname and then configure Route53 DNS to point that name to the associated host.
 
-Accordingly, most of the scripts work on the assumption that each of your EC2 instances has a tag called "Name", with the value being the FQDN of the host.
+Accordingly, most of the scripts work on the assumption that each of your EC2 instances has a tag called "Name", with the value being the fully qualified hostname.
 
 # System Requirements
 
