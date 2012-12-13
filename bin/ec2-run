@@ -1,0 +1,102 @@
+#!/bin/bash -e
+
+USERDATA_FILE=/tmp/ec2.userdata
+LAUNCH_FILE=/tmp/ec2_launch.out
+DESCRIBE_FILE=/tmp/ec2_describe.out
+
+usage() {
+  echo "Usage: ec2 run [ -g GROUP,... ]] AMI FQDN"
+}
+
+write_userdata() {
+cat <<-EOF > $USERDATA_FILE
+  #!/bin/bash
+
+  set -xeu
+
+  hostname $hostname
+  echo "$hostname" > /etc/hostname
+
+  awk '!/127\.0\.0\.1|127\.0\.1\.1/' /etc/hosts > /tmp/hosts
+  echo "127.0.0.1 $hostname $fqdn" > /etc/hosts
+  cat /tmp/hosts >> /etc/hosts
+EOF
+}
+
+launch_instance() {
+  ec2_command="ec2-run-instances $ami \
+    -t m1.large \
+    -b /dev/sda1=:100 \
+    -k psn-production \
+    -f $USERDATA_FILE"
+
+  groups=$(echo $groups | tr , " ")
+  for group in $groups; do
+    ec2_command="$ec2_command -g $group"
+  done
+
+  $ec2_command > $LAUNCH_FILE
+  ec2_instance_id=$(awk '/INSTANCE/ { print $2 }' $LAUNCH_FILE)
+}
+
+tag_instance() {
+  ec2-create-tags $ec2_instance_id --tag "Name=$fqdn"
+}
+
+wait_for_instance_address() {
+  set +e
+  pending=1
+
+  while [ $pending != 0 ]; do
+    ec2-describe-instances $ec2_instance_id > $DESCRIBE_FILE
+    grep running $DESCRIBE_FILE > /dev/null
+    pending=$?
+  done
+
+  set -e
+
+  ec2_ip_address=$(awk '/INSTANCE/ { print $14 }' $DESCRIBE_FILE)
+  ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
+}
+
+create_rrset() {
+  $(dirname $0)/route53-create -t CNAME ${fqdn}. $ec2_hostname
+}
+
+if [ $# == 0 ]; then usage; exit 1; fi
+
+while getopts "g:" opt; do
+    case $opt in
+      g)
+        groups=$OPTARG
+        shift 2
+        ;;
+      \?)
+        usage
+        exit 3
+        ;;
+    esac
+done
+
+if [ $# != 2 ]; then usage; exit 1; fi
+
+ami=$1
+fqdn=$2
+hostname=$(echo $fqdn | cut -f 1 -d .)
+
+write_userdata
+
+echo "Launching instance with hostname $fqdn from AMI $ami"
+
+launch_instance
+
+echo "EC2 Instance ID: $ec2_instance_id"
+
+tag_instance
+wait_for_instance_address
+
+echo "EC2 IP Address: $ec2_ip_address"
+echo "EC2 Hostname: $ec2_hostname"
+echo "PSN Hostname: $fqdn"
+
+create_rrset

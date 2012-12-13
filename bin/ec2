@@ -1,0 +1,17 @@
+#!/bin/bash -eu
+
+SCRIPT_DIR=$(dirname $0)
+
+usage() {
+  echo "Usage: ec2 COMMAND ARGS"
+}
+
+if [ $# == 0 ]; then usage; exit 1; fi
+
+command=$1 && shift
+if [ ! -x $SCRIPT_DIR/ec2-$command ]; then
+  echo "No such ec2 command: $command"
+  exit 1
+fi
+
+$SCRIPT_DIR/ec2-$command $@

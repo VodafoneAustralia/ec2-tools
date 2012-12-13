@@ -1,0 +1,34 @@
+#!/bin/bash -e
+
+DESCRIBE_FILE=/tmp/ec2_describe.out
+CODE_RUNNING=16
+
+usage() {
+  echo "Usage: ec2 list [ -r ] PATTERN"
+}
+
+running=0
+
+while getopts "r" opt; do
+    case $opt in
+      r)
+        running=1
+        shift
+        ;;
+      \?)
+        usage
+        exit 3
+        ;;
+    esac
+done
+
+if [ $# == 0 ]; then usage; exit 1; fi
+PATTERN=$1
+
+DESCRIBE_CMD=ec2-describe-instances
+if [ "$running" == "1" ]; then
+   DESCRIBE_CMD="$DESCRIBE_CMD --filter instance-state-code=$CODE_RUNNING"
+fi
+
+$DESCRIBE_CMD > $DESCRIBE_FILE
+awk '/^TAG.*Name\t'"$PATTERN"'$/ { print $3, $5 }' $DESCRIBE_FILE

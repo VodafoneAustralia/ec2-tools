@@ -1,0 +1,64 @@
+#!/usr/bin/env ruby
+
+$: << File.expand_path("../../lib", __FILE__)
+
+require 'rubygems'
+require 'getoptlong'
+require 'route53'
+
+ROUTE53_ZONE_ID = ENV['ROUTE53_ZONE_ID']
+ROUTE53_ZONE_NAME = ENV['ROUTE53_ZONE_NAME']
+
+def usage
+  puts "Usage: $0 [ -t TYPE ] [ -u ] NAME VALUE"
+end
+
+type = "A"
+update_only = false
+
+opts = GetoptLong.new(
+    [ "--type",	"-t", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--update-only",	"-u", GetoptLong::NO_ARGUMENT ]
+)
+
+begin
+  opts.each do |opt, arg|
+    case opt
+      when "--type"
+        type = arg.upcase
+      when "--update-only"
+        update_only = true
+    end
+  end
+rescue GetoptLong::Error => e
+  usage
+end
+
+
+unless ARGV.length == 2
+  usage
+  exit 1
+end
+
+name = ARGV[0]
+value = ARGV[1]
+
+puts "Checking for existing record set"
+list_response = Route53.list_rrsets ROUTE53_ZONE_ID, ROUTE53_ZONE_NAME
+
+matching_rrset = list_response.detect { |item| item[:name] == name}
+if matching_rrset
+  matching_rrset[:values].each do |existing_value|
+    puts "Deleting record #{matching_rrset[:name]} -> #{existing_value} (#{matching_rrset[:type]})"
+    Route53.delete_rrset ROUTE53_ZONE_ID, matching_rrset[:name], matching_rrset[:type], existing_value
+  end
+else
+  puts "None found"
+  if update_only
+    puts "Not created"
+    exit 0
+  end
+end
+
+puts "Creating record set #{name} -> #{value} (#{type})"
+Route53.create_rrset ROUTE53_ZONE_ID, name, type, value
