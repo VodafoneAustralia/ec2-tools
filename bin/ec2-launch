@@ -43,7 +43,7 @@ EOF
 
 launch_instance() {
   ec2_command="$EC2_RUN_CMD $ami \
-    -t m1.large \
+    -t t1.micro \
     -b /dev/sda1=:100 \
     -k $key_pair \
     -f $USERDATA_FILE"
@@ -59,6 +59,7 @@ launch_instance() {
 
 wait_for_instance_address() {
   set +e
+  trap "exit" INT
   pending=1
 
   while [ $pending != 0 ]; do
@@ -95,12 +96,12 @@ if [ -z $key_pair ]; then usage; exit 1; fi
 if [ $# != 2 ]; then usage; exit 1; fi
 
 ami=$1
-hostname=$2
-hostname=$(echo $hostname | cut -f 1 -d .)
+fqdn=$2
+hostname=$(echo $fqdn | cut -f 1 -d .)
 
 write_userdata
 
-echo "Launching instance with hostname $hostname from AMI $ami"
+echo "Launching instance with hostname $fqdn from AMI $ami"
 
 launch_instance
 
@@ -110,6 +111,6 @@ wait_for_instance_address
 
 echo "EC2 IP Address: $ec2_ip_address"
 echo "EC2 Hostname: $ec2_hostname"
-echo "PSN Hostname: $hostname"
+echo "Tagged Hostname: $fqdn"
 
-$(dirname $0)/ec2-name -d $ec2_instance_id $ec2_hostname
+$(dirname $0)/ec2-name -d $ec2_instance_id $fqdn
