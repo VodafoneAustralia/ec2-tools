@@ -1,0 +1,50 @@
+#!/bin/bash
+
+RUNNING_FILE=/tmp/ec2_running.out
+CODE_RUNNING=16
+
+. $(dirname $0)/functions
+
+usage() {
+  echo "Usage: $0 { start | stop | terminate } PATTERN"
+}
+
+if [ $# != 2 ]; then usage; exit 1; fi 
+
+state=$1
+pattern=$2
+
+case "$state" in
+  start)
+    state_code=80
+    ;;
+  stop)
+    state_code=16
+    ;;
+  terminate)
+    state_code=16
+    ;;
+  *)
+    usage
+    ;;
+esac
+
+$(dirname $0)/ec2-list -s $state_code $pattern > $RUNNING_FILE
+
+if [ $? != 0 ]; then
+  echo "No matching instances found"
+  exit 2
+fi
+
+echo "Will $state these instances:"
+cat $RUNNING_FILE
+echo
+
+instance_ids=$(awk 'BEGIN { ORS = " " } { print $1 }' $RUNNING_FILE)
+
+for id in $instance_ids; do
+  "$EC2_HOME/bin/ec2-$state-instances" $id
+  if [ $state == "start" ]; then
+    $(dirname $0)/ec2-name $id
+  fi
+done

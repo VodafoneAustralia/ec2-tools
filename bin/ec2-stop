@@ -1,0 +1,11 @@
+#!/bin/bash -e
+
+usage() {
+  echo "Usage: $0 PATTERN"
+}
+
+. $(dirname $0)/functions
+
+if [ $# == 0 ]; then usage; exit 1; fi 
+
+$(dirname $0)/ec2-state stop $1

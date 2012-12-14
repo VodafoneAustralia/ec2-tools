@@ -20,8 +20,10 @@ USERDATA_FILE=/tmp/ec2.userdata
 LAUNCH_FILE=/tmp/ec2_launch.out
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
+. $(dirname $0)/functions
+
 usage() {
-  echo "Usage: ec2 run -k KEY_PAIR [ -g GROUP,... ]] AMI HOSTNAME"
+  echo "Usage: $0 -k KEY_PAIR [ -g GROUP,... ]] AMI HOSTNAME"
 }
 
 write_userdata() {
@@ -40,8 +42,8 @@ EOF
 }
 
 launch_instance() {
-  ec2_command="ec2-run-instances $ami \
-    -t m1.large \
+  ec2_command="$EC2_RUN_CMD $ami \
+    -t t1.micro \
     -b /dev/sda1=:100 \
     -k $key_pair \
     -f $USERDATA_FILE"
@@ -57,10 +59,11 @@ launch_instance() {
 
 wait_for_instance_address() {
   set +e
+  trap "exit" INT
   pending=1
 
   while [ $pending != 0 ]; do
-    ec2-describe-instances $ec2_instance_id > $DESCRIBE_FILE
+    $EC2_DESCRIBE_CMD $ec2_instance_id > $DESCRIBE_FILE
     grep running $DESCRIBE_FILE > /dev/null
     pending=$?
   done
@@ -71,39 +74,34 @@ wait_for_instance_address() {
   ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
 }
 
-if [ $# == 0 ]; then usage; exit 1; fi
-
-while getopts "k:g:" opt; do
+while getopts "hk:g:" opt; do
     case $opt in
       h)
         usage
         exit 0
         ;;
       k)
-        key_pair=$OPTARG
-        shift 2
-        ;;
+        key_pair=$OPTARG;;
       g)
-        groups=$OPTARG
-        shift 2
-        ;;
+        groups=$OPTARG;;
       \?)
         usage
         exit 1
         ;;
     esac
 done
+shift $((OPTIND - 1))
 
 if [ -z $key_pair ]; then usage; exit 1; fi
 if [ $# != 2 ]; then usage; exit 1; fi
 
 ami=$1
-hostname=$2
-hostname=$(echo $hostname | cut -f 1 -d .)
+fqdn=$2
+hostname=$(echo $fqdn | cut -f 1 -d .)
 
 write_userdata
 
-echo "Launching instance with hostname $hostname from AMI $ami"
+echo "Launching instance with hostname $fqdn from AMI $ami"
 
 launch_instance
 
@@ -113,6 +111,6 @@ wait_for_instance_address
 
 echo "EC2 IP Address: $ec2_ip_address"
 echo "EC2 Hostname: $ec2_hostname"
-echo "PSN Hostname: $hostname"
+echo "Tagged Hostname: $fqdn"
 
-$(dirname $0)/ec2-name -d $ec2_instance_id $ec2_hostname
+$(dirname $0)/ec2-name -d $ec2_instance_id $fqdn

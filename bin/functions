@@ -16,49 +16,32 @@
 # CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-DESCRIBE_FILE=/tmp/ec2_describe.out
-RESULT_FILE=/tmp/ec2_result.out
-CODE_RUNNING=16
+export EC2_DESCRIBE_CMD="$EC2_HOME/bin/ec2-describe-instances"
+export EC2_RUN_CMD="$EC2_HOME/bin/ec2-run-instances"
+export EC2_TAG_CMD="$EC2_HOME/bin/ec2-create-tags"
 
-. $(dirname $0)/functions
+check_environment() {
+  if [ -z "$(which ruby)" ]; then
+    echo "Please ensure ruby 1.9.3 or greater is installed and in your PATH"
+  fi
+  
+  if [ -z "$AWS_ACCESS_KEY" -o -z "$AWS_SECRET_KEY" ]; then
+    echo "Please set both AWS_ACCESS_KEY and AWS_SECRET_KEY"
+    exit 1
+  fi
 
-usage() {
-  echo "Usage: $0 [ -s STATE ] [ PATTERN ]"
+  if [ -z "$EC2_HOME" -o ! -x "$EC2_HOME/bin/ec2-describe-instances" ]; then
+    echo "Please set EC2_HOME and make sure it's pointing to installation of Amazon EC2 API tools"
+    exit 1
+  fi
+
+  if [ -z "$EC2_URL" ]; then
+    echo "Please set EC2_URL with the URL of the EC2 API endpoint in your region"
+    exit 1
+  fi
+
+  if [ -z "$ROUTE53_ZONE_ID" -o -z "$ROUTE53_ZONE_NAME" ]; then
+    echo "Please set both ROUTE53_ZONE_ID and ROUTE53_ZONE_NAME"
+    exit 1
+  fi
 }
-
-while getopts "hs:" opt; do
-    case $opt in
-      h)
-        usage
-        exit 0
-        ;;
-      s)
-        state=$OPTARG;;
-      \?)
-        usage
-        exit 1
-        ;;
-    esac
-done
-shift $((OPTIND - 1))
-
-if [ $# == 0 ]; then 
-  PATTERN=".*"
-else
-  PATTERN=$1
-fi
-
-DESCRIBE_CMD=$EC2_DESCRIBE_CMD
-if [ -n "$state" ]; then
-   DESCRIBE_CMD="$DESCRIBE_CMD --filter instance-state-code=$state"
-fi
-
-$DESCRIBE_CMD > $DESCRIBE_FILE
-awk '/^TAG.*Name\t'"$PATTERN"'$/ { print $3, $5 }' $DESCRIBE_FILE > $RESULT_FILE
-
-cat $RESULT_FILE
-if [ $(wc -l $RESULT_FILE | awk '{ print $1 }') != 0 ]; then
-  exit 0
-else
-  exit 2
-fi
