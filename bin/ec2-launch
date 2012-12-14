@@ -20,6 +20,8 @@ USERDATA_FILE=/tmp/ec2.userdata
 LAUNCH_FILE=/tmp/ec2_launch.out
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
+. $(dirname $0)/functions
+
 usage() {
   echo "Usage: $0 -k KEY_PAIR [ -g GROUP,... ]] AMI HOSTNAME"
 }
@@ -40,7 +42,7 @@ EOF
 }
 
 launch_instance() {
-  ec2_command="ec2-run-instances $ami \
+  ec2_command="$EC2_RUN_CMD $ami \
     -t m1.large \
     -b /dev/sda1=:100 \
     -k $key_pair \
@@ -60,7 +62,7 @@ wait_for_instance_address() {
   pending=1
 
   while [ $pending != 0 ]; do
-    ec2-describe-instances $ec2_instance_id > $DESCRIBE_FILE
+    $EC2_DESCRIBE_CMD $ec2_instance_id > $DESCRIBE_FILE
     grep running $DESCRIBE_FILE > /dev/null
     pending=$?
   done

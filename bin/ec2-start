@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+. $(dirname $0)/functions
+
 usage() {
   echo "Usage: $0 PATTERN"
 }

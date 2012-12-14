@@ -1,4 +1,4 @@
-#!/bin/bash -eu
+#!/bin/bash -e
 
 # Copyright (c) 2012 DiUS Computing Pty Ltd
 
@@ -19,9 +19,13 @@
 
 SCRIPT_DIR=$(dirname $0)
 
+. $SCRIPT_DIR/functions
+
 usage() {
   echo "Usage: ec2 COMMAND ARGS"
 }
+
+check_environment
 
 if [ $# == 0 ]; then usage; exit 1; fi
 

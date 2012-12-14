@@ -18,6 +18,8 @@
 
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
+. $(dirname $0)/functions
+
 usage() {
   echo "Usage: $0 [ -d ] INSTANCE_ID [ HOSTNAME ]"
 }
@@ -44,7 +46,7 @@ if [ $# == 0 ]; then usage; exit 1; fi
 
 instance_id=$1
 
-ec2-describe-instances $instance_id > $DESCRIBE_FILE
+$EC2_DESCRIBE_CMD $instance_id > $DESCRIBE_FILE
 ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
 tag_hostname=$(awk '/^TAG.*Name.*$/ { print $5 }' $DESCRIBE_FILE)
 
@@ -58,7 +60,7 @@ else
   hostname=$2
 fi
 
-ec2-create-tags $instance_id --tag "Name=$hostname"
+$EC2_TAG_CMD $instance_id --tag "Name=$hostname"
 
 if [ "$create_dns" == "1" ]; then
   $(dirname $0)/route53-create -t CNAME ${hostname}. $ec2_hostname

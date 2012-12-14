@@ -3,6 +3,8 @@
 RUNNING_FILE=/tmp/ec2_running.out
 CODE_RUNNING=16
 
+. $(dirname $0)/functions
+
 usage() {
   echo "Usage: $0 { start | stop | terminate } PATTERN"
 }
@@ -41,7 +43,7 @@ echo
 instance_ids=$(awk 'BEGIN { ORS = " " } { print $1 }' $RUNNING_FILE)
 
 for id in $instance_ids; do
-  ec2-$state-instances $id
+  "$EC2_HOME/bin/ec2-$state-instances" $id
   if [ $state == "start" ]; then
     $(dirname $0)/ec2-name $id
   fi
