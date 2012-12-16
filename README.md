@@ -76,26 +76,26 @@ Lists all instance with hostnames matching the specified regular expression, and
 
 The state codes are those used by the Amazon EC2 API tools, i.e.:
 
-0       pending
-16      running
-32      shutting-down
-48      terminated
-64      stopping
-80      stopped
+0     pending  
+16    running  
+32    shutting-down  
+48    terminated  
+64    stopping  
+80    stopped  
 
-#ec2 start
+##ec2 start
 
 Usage `ec2 start PATTERN`
 
 Starts any stopped instances with hostnames matching the specified regular expression.
 
-#ec2 stop
+##ec2 stop
 
 Usage `ec2 stop PATTERN`
 
 Stops any started instances with hostnames matching the specified regular expression.
 
-#ec2 terminate
+##ec2 terminate
 
 Usage `ec2 terminate PATTERN`
 
