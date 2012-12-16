@@ -45,6 +45,6 @@ instance_ids=$(awk 'BEGIN { ORS = " " } { print $1 }' $RUNNING_FILE)
 for id in $instance_ids; do
   "$EC2_HOME/bin/ec2-$state-instances" $id
   if [ $state == "start" ]; then
-    $(dirname $0)/ec2-name $id
+    $(dirname $0)/ec2-name -d $id
   fi
 done

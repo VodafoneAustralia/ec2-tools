@@ -58,9 +58,8 @@ if [ $# == 1 ]; then
   hostname=$tag_hostname
 else
   hostname=$2
+  $EC2_TAG_CMD $instance_id --tag "Name=$hostname"
 fi
-
-$EC2_TAG_CMD $instance_id --tag "Name=$hostname"
 
 if [ "$create_dns" == "1" ]; then
   $(dirname $0)/route53-create -t CNAME ${hostname}. $ec2_hostname
