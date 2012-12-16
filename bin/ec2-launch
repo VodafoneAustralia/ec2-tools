@@ -20,6 +20,8 @@ USERDATA_FILE=/tmp/ec2.userdata
 LAUNCH_FILE=/tmp/ec2_launch.out
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
+DEFAULT_INSTANCE_TYPE="t1.micro"
+
 . $(dirname $0)/functions
 
 usage() {
@@ -43,7 +45,7 @@ EOF
 
 launch_instance() {
   ec2_command="$EC2_RUN_CMD $ami \
-    -t t1.micro \
+    -t $instance_type \
     -b /dev/sda1=:100 \
     -k $key_pair \
     -f $USERDATA_FILE"
@@ -59,7 +61,6 @@ launch_instance() {
 
 wait_for_instance_address() {
   set +e
-  trap "exit" INT
   pending=1
 
   while [ $pending != 0 ]; do
@@ -74,12 +75,16 @@ wait_for_instance_address() {
   ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
 }
 
-while getopts "hk:g:" opt; do
+instance_type=$DEFAULT_INSTANCE_TYPE
+
+while getopts "ht:k:g:" opt; do
     case $opt in
       h)
         usage
         exit 0
         ;;
+      t)
+        instance_type=$OPTARG;;
       k)
         key_pair=$OPTARG;;
       g)
