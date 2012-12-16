@@ -37,6 +37,69 @@ Amazon identifiers and credentials are expected to be set in the environment.  H
   
     # The name of the Route 53 zone you wish to contain your DNS records, e.g. example.com
     export ROUTE53_ZONE_NAME=example.com
+    
+#Commands
+
+The scripts follow a command + subcommand format, e.g. `ec2 launch [ args ]`.  A list of available ec2 subcommands follows.
+
+##ec2 launch
+
+Usage: `ec2 launch -k KEY_PAIR [ -t TYPE ] [ -g GROUP,... ]] AMI HOSTNAME"`
+
+Launches a new instance from the specified AMI, and with the given fully qualified hostname.
+
+The hostname will be used to call `ec2 name`, which will configure the instance "Name" tag and Route 53 DNS.
+
+Arguments:
+
+-k      Name of the EC2 key pair to be installed.  Required.
+
+-t      Instance type to be created.  Optional, defaults to "t1.micro".
+
+-g      One or more security groups to be added to the new instance, comma delimited.  Optional, defaults to "default".
+
+##ec2 name
+
+Usage: `ec2 name INSTANCE_ID [ HOSTNAME ]`
+
+Maintains synchronisation between the instance's "Name" tag and Route 53 DNS
+
+If the hostname is supplied, it will be set as value of the "Name" tag, and a new CNAME recordset will be created in Route 53 pointing to the external AWS hostname for this instance.
+
+If the hostname is not supplied, the existing "Name" tag will be read and Route 53 DNS updated accordingly.
+
+##ec2 list
+
+Usage: `ec2 list [ -s STATE ] [ PATTERN ]`
+
+Lists all instance with hostnames matching the specified regular expression, and in the specified state.
+
+The state codes are those used by the Amazon EC2 API tools, i.e.:
+
+0       pending
+16      running
+32      shutting-down
+48      terminated
+64      stopping
+80      stopped
+
+#ec2 start
+
+Usage `ec2 start PATTERN`
+
+Starts any stopped instances with hostnames matching the specified regular expression.
+
+#ec2 stop
+
+Usage `ec2 stop PATTERN`
+
+Stops any started instances with hostnames matching the specified regular expression.
+
+#ec2 terminate
+
+Usage `ec2 terminate PATTERN`
+
+Terminates any instances with hostnames matching the specified regular expression.
 
 # License
 
