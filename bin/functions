@@ -20,6 +20,8 @@ export EC2_DESCRIBE_CMD="$EC2_HOME/bin/ec2-describe-instances"
 export EC2_RUN_CMD="$EC2_HOME/bin/ec2-run-instances"
 export EC2_TAG_CMD="$EC2_HOME/bin/ec2-create-tags"
 
+DESCRIBE_FILE=/tmp/ec2_describe.out
+
 check_environment() {
   if [ -z "$(which ruby)" ]; then
     echo "Please ensure ruby 1.9.3 or greater is installed and in your PATH"
@@ -45,3 +47,28 @@ check_environment() {
     exit 1
   fi
 }
+
+get_instance_address() {
+  set +e
+  if [ $# != 1 ]; then echo "get_instance_address() expects instance ID as argument"; exit 1; fi
+  instance_id=$1
+
+  pending=0
+  while [ $pending == 0 ]; do
+    $EC2_DESCRIBE_CMD $ec2_instance_id > $DESCRIBE_FILE
+    grep pending $DESCRIBE_FILE > /dev/null
+    pending=$?        
+  done
+  
+  grep running $DESCRIBE_FILE > /dev/null
+  if [ $? != 0 ]; then
+    echo "Instance $instance_id isn't running or pending"
+    exit 1
+  fi
+  
+  set -e
+
+  ec2_ip_address=$(awk '/INSTANCE/ { print $14 }' $DESCRIBE_FILE)
+  ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
+}
+

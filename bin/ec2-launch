@@ -59,22 +59,6 @@ launch_instance() {
   ec2_instance_id=$(awk '/INSTANCE/ { print $2 }' $LAUNCH_FILE)
 }
 
-wait_for_instance_address() {
-  set +e
-  pending=1
-
-  while [ $pending != 0 ]; do
-    $EC2_DESCRIBE_CMD $ec2_instance_id > $DESCRIBE_FILE
-    grep running $DESCRIBE_FILE > /dev/null
-    pending=$?
-  done
-
-  set -e
-
-  ec2_ip_address=$(awk '/INSTANCE/ { print $14 }' $DESCRIBE_FILE)
-  ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
-}
-
 instance_type=$DEFAULT_INSTANCE_TYPE
 
 while getopts "ht:k:g:" opt; do
@@ -112,7 +96,7 @@ launch_instance
 
 echo "EC2 Instance ID: $ec2_instance_id"
 
-wait_for_instance_address
+get_instance_address $ec2_instance_id
 
 echo "EC2 IP Address: $ec2_ip_address"
 echo "EC2 Hostname: $ec2_hostname"
