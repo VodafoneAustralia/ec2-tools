@@ -25,43 +25,13 @@ DEFAULT_INSTANCE_TYPE="t1.micro"
 . $(dirname $0)/functions
 
 usage() {
-  echo "Usage: $0 -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] AMI HOSTNAME"
-}
-
-write_userdata() {
-cat <<-EOF > $USERDATA_FILE
-  #!/bin/bash
-
-  set -xeu
-
-  hostname $hostname
-  echo "$hostname" > /etc/hostname
-
-  awk '!/127\.0\.0\.1|127\.0\.1\.1/' /etc/hosts > /tmp/hosts
-  echo "127.0.0.1 $hostname $hostname" > /etc/hosts
-  cat /tmp/hosts >> /etc/hosts
-EOF
-}
-
-launch_instance() {
-  ec2_command="$EC2_RUN_CMD $ami \
-    -t $instance_type \
-    -b /dev/sda1=:100 \
-    -k $key_pair \
-    -f $USERDATA_FILE"
-
-  groups=$(echo $groups | tr , " ")
-  for group in $groups; do
-    ec2_command="$ec2_command -g $group"
-  done
-
-  $ec2_command > $LAUNCH_FILE
-  ec2_instance_id=$(awk '/INSTANCE/ { print $2 }' $LAUNCH_FILE)
+  echo "Usage: $0 -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] [ -d DURATION ] AMI HOSTNAME"
 }
 
 instance_type=$DEFAULT_INSTANCE_TYPE
+duration=0
 
-while getopts "ht:k:g:" opt; do
+while getopts "ht:k:g:d:" opt; do
     case $opt in
       h)
         usage
@@ -73,6 +43,8 @@ while getopts "ht:k:g:" opt; do
         key_pair=$OPTARG;;
       g)
         groups=$OPTARG;;
+      d)
+        duration=$OPTARG;;
       \?)
         usage
         exit 1
@@ -87,12 +59,28 @@ if [ $# != 2 ]; then usage; exit 1; fi
 ami=$1
 fqdn=$2
 hostname=$(echo $fqdn | cut -f 1 -d .)
-
-write_userdata
+if [ $duration != 0 ]; then
+  check_ssh_environment
+fi
 
 echo "Launching instance with hostname $fqdn from AMI $ami"
 
-launch_instance
+ec2_command="$EC2_RUN_CMD $ami \
+  -t $instance_type \
+  -b /dev/sda1=:100 \
+  -k $key_pair"
+
+groups=$(echo $groups | tr , " ")
+for group in $groups; do
+  ec2_command="$ec2_command -g $group"
+done
+
+if [ $duration != 0 ]; then
+  ec2_command="$ec2_command --instance-initiated-shutdown-behavior terminate"
+fi
+
+$ec2_command > $LAUNCH_FILE
+ec2_instance_id=$(awk '/INSTANCE/ { print $2 }' $LAUNCH_FILE)
 
 echo "EC2 Instance ID: $ec2_instance_id"
 
@@ -103,3 +91,19 @@ echo "EC2 Hostname: $ec2_hostname"
 echo "Tagged Hostname: $fqdn"
 
 $(dirname $0)/ec2-name -d $ec2_instance_id $fqdn
+
+if [ $duration != 0 ]; then
+  echo "Scheduling termination in $duration minutes"
+  
+  set +e
+  ssh -i $EC2_SSH_KEY_PATH \
+    -o StrictHostKeyChecking=no \
+    -o ConnectionAttempts=120 \
+    $EC2_SSH_USER@$ec2_hostname \
+    "echo 'sudo halt' | at now + $duration min"
+  
+  if [ $? == 255 ]; then
+    echo "Error occurred connecting to $ec2_hostname after 120 attempts"
+  fi
+  set -e    
+fi
