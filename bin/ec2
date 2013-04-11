@@ -21,6 +21,7 @@ SCRIPT_DIR=$(dirname $0)
 
 . $SCRIPT_DIR/functions
 check_mandatory_environment
+check_ssh_environment
 
 usage() {
   echo "Usage: ec2 COMMAND ARGS"

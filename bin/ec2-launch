@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env ruby
 
 # Copyright (c) 2012 DiUS Computing Pty Ltd
 
@@ -16,94 +16,111 @@
 # CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-USERDATA_FILE=/tmp/ec2.userdata
-LAUNCH_FILE=/tmp/ec2_launch.out
-DESCRIBE_FILE=/tmp/ec2_describe.out
+$: << File.expand_path("../../lib", __FILE__)
 
-DEFAULT_INSTANCE_TYPE="t1.micro"
+require 'rubygems'
+require 'getoptlong'
+require 'open3'
+require 'socket'
+require 'timeout'
+require 'net/ssh'
+require 'aws'
+require 'ec2'
 
-. $(dirname $0)/functions
+DEFAULT_INSTANCE_TYPE = "t1.micro"
+USAGE = "Usage: ec2-launch -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] [ -d DURATION ] AMI_NAME HOSTNAME"
 
-usage() {
-  echo "Usage: $0 -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] [ -d DURATION ] AMI HOSTNAME"
+instance_type = DEFAULT_INSTANCE_TYPE
+security_groups = []
+key_pair = nil
+duration = nil
+
+opts = GetoptLong.new(
+    [ "--key-pair",	"-k", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--type",	"-t", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--group",	"-g", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--duration",	"-d", GetoptLong::REQUIRED_ARGUMENT ]
+)
+
+begin
+  opts.each do |opt, arg|
+    case opt
+      when "--key-pair"
+        key_pair = arg
+      when "--type"
+        instance_type = arg
+      when "--group"
+        security_groups = arg.split(',')
+      when "--duration"
+        duration = arg
+    end
+  end
+rescue GetoptLong::Error => e
+  puts USAGE
+  exit 1
+end
+
+unless key_pair and ARGV.length == 2
+  puts USAGE
+  exit 1
+end
+
+ami_name = ARGV[0]
+hostname = ARGV[1]
+short_hostname = hostname.split('.').first
+
+ami = latest_ami_by_name(ami_name)
+if !ami
+  puts "No such AMI with name #{ami_name}"
+  exit 1
+end
+
+instance_opts = {
+  :image_id => ami.id,
+  :key_name => key_pair,
+  :instance_type => instance_type,
+  :block_device_mappings => { "/dev/sda1" => { :volume_size => 100 } },
+  :security_groups => security_groups
 }
 
-instance_type=$DEFAULT_INSTANCE_TYPE
-duration=0
+if duration
+  instance_opts[:instance_initiated_shutdown_behavior] = 'terminate'
+end
 
-while getopts "ht:k:g:d:" opt; do
-    case $opt in
-      h)
-        usage
-        exit 0
-        ;;
-      t)
-        instance_type=$OPTARG;;
-      k)
-        key_pair=$OPTARG;;
-      g)
-        groups=$OPTARG;;
-      d)
-        duration=$OPTARG;;
-      \?)
-        usage
-        exit 1
-        ;;
-    esac
-done
-shift $((OPTIND - 1))
+puts "Launching instance with hostname #{hostname} from AMI #{ami.id}"
 
-if [ -z $key_pair ]; then usage; exit 1; fi
-if [ $# != 2 ]; then usage; exit 1; fi
+instance = ec2.instances.create(instance_opts)
 
-ami=$1
-fqdn=$2
-hostname=$(echo $fqdn | cut -f 1 -d .)
-if [ $duration != 0 ]; then
-  check_ssh_environment
-fi
+puts "EC2 Instance ID: #{instance.id}"
+puts "Waiting for instance to transition to running state"
 
-echo "Launching instance with hostname $fqdn from AMI $ami"
+begin
+  wait_for_instance_state(instance, :running)
+rescue Timeout::Error
+  puts "Timed out waiting for instance to transition to #{state} state"
+  exit 1
+end
 
-ec2_command="$EC2_RUN_CMD $ami \
-  -t $instance_type \
-  -b /dev/sda1=:100 \
-  -k $key_pair"
+puts "EC2 IP Address: #{instance.ip_address}"
+puts "EC2 Hostname: #{instance.dns_name}"
+puts "Tagged Hostname: #{hostname}"
 
-groups=$(echo $groups | tr , " ")
-for group in $groups; do
-  ec2_command="$ec2_command -g $group"
-done
+begin
+  name_instance(instance, hostname)
+rescue exception
+  puts exception.message
+  exit 1
+end
 
-if [ $duration != 0 ]; then
-  ec2_command="$ec2_command --instance-initiated-shutdown-behavior terminate"
-fi
-
-$ec2_command > $LAUNCH_FILE
-ec2_instance_id=$(awk '/INSTANCE/ { print $2 }' $LAUNCH_FILE)
-
-echo "EC2 Instance ID: $ec2_instance_id"
-
-get_instance_address $ec2_instance_id
-
-echo "EC2 IP Address: $ec2_ip_address"
-echo "EC2 Hostname: $ec2_hostname"
-echo "Tagged Hostname: $fqdn"
-
-$(dirname $0)/ec2-name -d $ec2_instance_id $fqdn
-
-if [ $duration != 0 ]; then
-  echo "Scheduling termination in $duration minutes"
-  
-  set +e
-  ssh -i $EC2_SSH_KEY_PATH \
-    -o StrictHostKeyChecking=no \
-    -o ConnectionAttempts=120 \
-    $EC2_SSH_USER@$ec2_hostname \
-    "echo 'sudo halt' | at now + $duration min"
-  
-  if [ $? == 255 ]; then
-    echo "Error occurred connecting to $ec2_hostname after 120 attempts"
-  fi
-  set -e    
-fi
+if duration
+  puts "Waiting for port 22 to open on #{instance.dns_name}"
+  begin
+    wait_for_port instance.dns_name, 22
+  rescue Timeout::Error
+    puts "Timed out waiting for port to open"
+    exit 1
+  end
+    
+  puts "Scheduling termination in #{duration} minutes"
+  ssh_exec(instance, "echo 'sudo halt' | at now + #{duration} min")
+end
