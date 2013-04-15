@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env ruby
 
 # Copyright (c) 2012 DiUS Computing Pty Ltd
 
@@ -16,49 +16,57 @@
 # CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-DESCRIBE_FILE=/tmp/ec2_describe.out
-RESULT_FILE=/tmp/ec2_result.out
-CODE_RUNNING=16
+$: << File.expand_path("../../lib", __FILE__)
 
-. $(dirname $0)/functions
+require 'rubygems'
+require 'getoptlong'
+require 'aws'
+require 'ec2'
 
-usage() {
-  echo "Usage: $0 [ -s STATE ] [ PATTERN ]"
+USAGE = "Usage: ec2 list [ -s STATE ] [ PATTERN ]\nWhere STATE is one of pending, running, stopped, not_terminated, any"
+STATE_CODES = {
+  :pending => [0],
+  :running => [16],
+  :stopped => [80],
+  :not_terminated => [0, 16, 32, 64, 80],
+  :any => [0, 16, 32, 48, 64, 80]
 }
 
-while getopts "hs:" opt; do
-    case $opt in
-      h)
-        usage
-        exit 0
-        ;;
-      s)
-        state=$OPTARG;;
-      \?)
-        usage
-        exit 1
-        ;;
-    esac
-done
-shift $((OPTIND - 1))
+opts = GetoptLong.new(
+    [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
+    [ "--state",	"-s", GetoptLong::REQUIRED_ARGUMENT ]
+)
 
-if [ $# == 0 ]; then 
-  PATTERN=".*"
+state_codes = STATE_CODES[:any]
+
+begin
+  opts.each do |opt, arg|
+    case opt
+      when "--help"
+        puts USAGE
+        exit
+      when "--state"
+        state_codes = STATE_CODES[arg.downcase.to_sym]
+        if !state_codes
+          puts "Unknown state: #{arg}"
+          exit 1
+        end
+    end
+  end
+rescue GetoptLong::Error => e
+  puts USAGE
+  exit 1
+end
+
+if ARGV.count == 0
+  pattern = /.*/
 else
-  PATTERN=$1
-fi
+  pattern = /#{ARGV[0]}/
+end
 
-DESCRIBE_CMD=$EC2_DESCRIBE_CMD
-if [ -n "$state" ]; then
-   DESCRIBE_CMD="$DESCRIBE_CMD --filter instance-state-code=$state"
-fi
-
-$DESCRIBE_CMD > $DESCRIBE_FILE
-awk '/^TAG.*Name\t'"$PATTERN"'$/ { print $3, $5 }' $DESCRIBE_FILE > $RESULT_FILE
-
-cat $RESULT_FILE
-if [ $(wc -l $RESULT_FILE | awk '{ print $1 }') != 0 ]; then
-  exit 0
-else
-  exit 2
-fi
+state_codes = state_codes.map { |code| code.to_s }
+ec2.instances.filter('instance-state-code', state_codes).each do |instance|
+  if instance.tags.Name =~ pattern
+    puts "#{instance.id}\t#{instance.tags.Name}\t#{instance.status}"
+  end
+end
