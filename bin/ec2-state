@@ -1,7 +1,6 @@
 #!/bin/bash
 
 RUNNING_FILE=/tmp/ec2_running.out
-CODE_RUNNING=16
 
 . $(dirname $0)/functions
 
@@ -16,20 +15,20 @@ pattern=$2
 
 case "$state" in
   start)
-    state_code=80
+    state_desc=stopped
     ;;
   stop)
-    state_code=16
+    state_desc=running
     ;;
   terminate)
-    state_code=16
+    state_desc=not_terminated
     ;;
   *)
     usage
     ;;
 esac
 
-$(dirname $0)/ec2-list -s $state_code $pattern > $RUNNING_FILE
+$(dirname $0)/ec2-list -s $state_desc $pattern > $RUNNING_FILE
 
 if [ $? != 0 ]; then
   echo "No matching instances found"
