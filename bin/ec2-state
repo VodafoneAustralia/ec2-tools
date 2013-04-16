@@ -46,7 +46,7 @@ for id in $instance_ids; do
 
   if [ $state == "start" ]; then
     get_instance_address $id
-    $(dirname $0)/ec2-name -d $id
+    $(dirname $0)/ec2-name $id
   fi
 
 done
