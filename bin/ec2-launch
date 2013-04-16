@@ -20,31 +20,29 @@ $: << File.expand_path("../../lib", __FILE__)
 
 require 'rubygems'
 require 'getoptlong'
-require 'open3'
-require 'socket'
-require 'timeout'
-require 'net/ssh'
-require 'aws'
-require 'ec2'
+require 'ec2_tools'
 
-DEFAULT_INSTANCE_TYPE = "t1.micro"
 USAGE = "Usage: ec2-launch -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] [ -d DURATION ] AMI_NAME HOSTNAME"
 
-instance_type = DEFAULT_INSTANCE_TYPE
-security_groups = []
-key_pair = nil
-duration = nil
-
 opts = GetoptLong.new(
+    [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
     [ "--key-pair",	"-k", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--type",	"-t", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--group",	"-g", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--duration",	"-d", GetoptLong::REQUIRED_ARGUMENT ]
 )
 
+instance_type = EC2Tools::EC2::DEFAULT_INSTANCE_TYPE
+security_groups = []
+key_pair = nil
+duration = nil
+
 begin
   opts.each do |opt, arg|
     case opt
+      when "--help"
+        puts USAGE
+        exit 0
       when "--key-pair"
         key_pair = arg
       when "--type"
@@ -65,62 +63,4 @@ unless key_pair and ARGV.length == 2
   exit 1
 end
 
-ami_name = ARGV[0]
-hostname = ARGV[1]
-short_hostname = hostname.split('.').first
-
-ami = latest_ami_by_name(ami_name)
-if !ami
-  puts "No such AMI with name #{ami_name}"
-  exit 1
-end
-
-instance_opts = {
-  :image_id => ami.id,
-  :key_name => key_pair,
-  :instance_type => instance_type,
-  :block_device_mappings => { "/dev/sda1" => { :volume_size => 100 } },
-  :security_groups => security_groups
-}
-
-if duration
-  instance_opts[:instance_initiated_shutdown_behavior] = 'terminate'
-end
-
-puts "Launching instance with hostname #{hostname} from AMI #{ami.id}"
-
-instance = ec2.instances.create(instance_opts)
-
-puts "EC2 Instance ID: #{instance.id}"
-puts "Waiting for instance to transition to running state"
-
-begin
-  wait_for_instance_state(instance, :running)
-rescue Timeout::Error
-  puts "Timed out waiting for instance to transition to #{state} state"
-  exit 1
-end
-
-puts "EC2 IP Address: #{instance.ip_address}"
-puts "EC2 Hostname: #{instance.dns_name}"
-puts "Tagged Hostname: #{hostname}"
-
-begin
-  name_instance(instance, hostname)
-rescue exception
-  puts exception.message
-  exit 1
-end
-
-if duration
-  puts "Waiting for port 22 to open on #{instance.dns_name}"
-  begin
-    wait_for_port instance.dns_name, 22
-  rescue Timeout::Error
-    puts "Timed out waiting for port to open"
-    exit 1
-  end
-    
-  puts "Scheduling termination in #{duration} minutes"
-  ssh_exec(instance, "echo 'sudo halt' | at now + #{duration} min")
-end
+EC2Tools::EC2::launch_instance(key_pair, instance_type, security_groups, duration, ARGV[0], ARGV[1])

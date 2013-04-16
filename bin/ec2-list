@@ -20,24 +20,16 @@ $: << File.expand_path("../../lib", __FILE__)
 
 require 'rubygems'
 require 'getoptlong'
-require 'aws'
-require 'ec2'
+require 'ec2_tools'
 
 USAGE = "Usage: ec2 list [ -s STATE ] [ PATTERN ]\nWhere STATE is one of pending, running, stopped, not_terminated, any"
-STATE_CODES = {
-  :pending => [0],
-  :running => [16],
-  :stopped => [80],
-  :not_terminated => [0, 16, 32, 64, 80],
-  :any => [0, 16, 32, 48, 64, 80]
-}
 
 opts = GetoptLong.new(
     [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
     [ "--state",	"-s", GetoptLong::REQUIRED_ARGUMENT ]
 )
 
-state_codes = STATE_CODES[:any]
+state_codes = EC2Tools::EC2::STATE_CODES[:any]
 
 begin
   opts.each do |opt, arg|
@@ -46,7 +38,7 @@ begin
         puts USAGE
         exit
       when "--state"
-        state_codes = STATE_CODES[arg.downcase.to_sym]
+        state_codes = EC2Tools::EC2::STATE_CODES[arg.downcase.to_sym]
         if !state_codes
           puts "Unknown state: #{arg}"
           exit 1
@@ -59,14 +51,7 @@ rescue GetoptLong::Error => e
 end
 
 if ARGV.count == 0
-  pattern = /.*/
+  EC2Tools::EC2::list_instances(state_codes, /.*/)
 else
-  pattern = /#{ARGV[0]}/
-end
-
-state_codes = state_codes.map { |code| code.to_s }
-ec2.instances.filter('instance-state-code', state_codes).each do |instance|
-  if instance.tags.Name =~ pattern
-    puts "#{instance.id}\t#{instance.tags.Name}\t#{instance.status}"
-  end
+  EC2Tools::EC2::list_instances(state_codes, /#{ARGV[0]}/)
 end

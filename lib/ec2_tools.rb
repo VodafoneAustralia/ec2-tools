@@ -1,5 +1,3 @@
-#!/usr/bin/env ruby
-
 # Copyright (c) 2012 DiUS Computing Pty Ltd
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
@@ -16,47 +14,42 @@
 # CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-$: << File.expand_path("../../lib", __FILE__)
-
-require 'rubygems'
-require 'getoptlong'
+require 'socket'
+require 'timeout'
 require 'aws'
-require 'ec2_tools'
 
-USAGE = "Usage: ec2-name INSTANCE_ID [ HOSTNAME ]"
+require 'ec2_tools/ec2'
+require 'ec2_tools/route53'
 
-opts = GetoptLong.new(
-    [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
-)
+module EC2Tools
 
-begin
-  opts.each do |opt, arg|
-    case opt
-      when "--help"
-        puts USAGE
-        exit 0
+  AWS_ACCESS_KEY = ENV['AWS_ACCESS_KEY']
+  AWS_SECRET_KEY = ENV['AWS_SECRET_KEY']
+
+  AWS.config(:access_key_id => AWS_ACCESS_KEY, :secret_access_key => AWS_SECRET_KEY)
+
+  def self.ec2
+    ec2 = AWS::EC2.new(:ec2_endpoint => 'ec2.ap-southeast-2.amazonaws.com')
+  end
+
+  def self.wait_for_port(ip_address, port, seconds = 120)
+    Timeout::timeout(seconds) do
+      open = false
+      while !open
+        sleep 1
+        open = connect_to_port(ip_address, port)
+      end
     end
   end
-rescue GetoptLong::Error => e
-  puts USAGE
-  exit 1
-end
 
-unless ARGV.length > 0
-  puts USAGE
-  exit 1
-end
-
-instance = EC2Tools::EC2::ec2.instances[ARGV[0]]
-
-if ARGV.count > 1
-  hostname = ARGV[1]
-else
-  hostname = instance.tags.Name
-  if !hostname || hostname.length == 0
-    puts "Instance #{instance.id} has no Name tag and you didn't specify a hostname"
-    exit 1
+  def self.connect_to_port(ip_address, port)
+    begin
+      TCPSocket.new(ip_address, port).close
+      true
+    rescue Errno::ECONNREFUSED, Errno::EHOSTUNREACH
+      false
+    end
   end
+
 end
 
-EC2Tools::EC2::name_instance(instance, hostname)
