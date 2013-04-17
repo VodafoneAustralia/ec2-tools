@@ -29,13 +29,15 @@ opts = GetoptLong.new(
     [ "--key-pair",	"-k", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--type",	"-t", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--group",	"-g", GetoptLong::REQUIRED_ARGUMENT ],
-    [ "--duration",	"-d", GetoptLong::REQUIRED_ARGUMENT ]
+    [ "--duration",	"-d", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--no-obsolete",	"-O", GetoptLong::NO_ARGUMENT ]
 )
 
 instance_type = EC2Tools::EC2::DEFAULT_INSTANCE_TYPE
 security_groups = []
 key_pair = nil
 duration = nil
+no_obsolete = false
 
 begin
   opts.each do |opt, arg|
@@ -51,6 +53,8 @@ begin
         security_groups = arg.split(',')
       when "--duration"
         duration = arg
+      when "--no-obsolete"
+        no_obsolete = true
     end
   end
 rescue GetoptLong::Error => e
@@ -63,4 +67,11 @@ unless key_pair and ARGV.length == 2
   exit 1
 end
 
-EC2Tools::EC2::launch_instance(key_pair, instance_type, security_groups, duration, ARGV[0], ARGV[1])
+ami_name = ARGV[0]
+hostname = ARGV[1]
+
+if EC2Tools::EC2::list_instances(EC2Tools::EC2::STATE_CODES[:running], /^#{hostname}$/).count == 0
+  EC2Tools::EC2::launch_instance(key_pair, instance_type, security_groups, duration, ami_name, hostname)
+else
+  puts "An instance with hostname #{hostname} is already running, and you specified --no-obsolete"
+end

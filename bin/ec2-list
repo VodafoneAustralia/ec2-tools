@@ -51,7 +51,11 @@ rescue GetoptLong::Error => e
 end
 
 if ARGV.count == 0
-  EC2Tools::EC2::list_instances(state_codes, /.*/)
+  instances = EC2Tools::EC2::list_instances(state_codes, /.*/)
 else
-  EC2Tools::EC2::list_instances(state_codes, /#{ARGV[0]}/)
+  instances = EC2Tools::EC2::list_instances(state_codes, /#{ARGV[0]}/)
+end
+
+instances.each do |instance|
+  puts "#{instance.id}\t#{instance.tags.Name}\t#{instance.dns_name}\t#{instance.status}"
 end

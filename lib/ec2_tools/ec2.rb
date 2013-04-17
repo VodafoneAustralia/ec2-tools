@@ -149,10 +149,8 @@ module EC2Tools
 
     def self.list_instances(state_codes, pattern)
       state_codes = state_codes.map { |code| code.to_s }
-      ec2.instances.filter('instance-state-code', state_codes).each do |instance|
-        if instance.tags.Name =~ pattern
-          puts "#{instance.id}\t#{instance.tags.Name}\t#{instance.dns_name}\t#{instance.status}"
-        end
+      ec2.instances.filter('instance-state-code', state_codes).select do |instance|
+        instance.tags.Name =~ pattern
       end
     end
 
