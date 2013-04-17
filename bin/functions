@@ -50,12 +50,12 @@ check_mandatory_environment() {
 
 check_ssh_environment() {
   if [ -z "$EC2_SSH_USER" ]; then
-    echo "Please set EC2_USER with a username that can connect to your instances via SSH"
+    echo "Please set EC2_SSH_USER with a username that can connect to your instances via SSH"
     exit 1
   fi
 
   if [ -z "$EC2_SSH_KEY_PATH" ]; then
-    echo "Please set EC2_KEY_PATH with the path to your EC2_USER's private key (e.g. ~/.ssh/ec2_key_pair.pem)"
+    echo "Please set EC2_SSH_KEY_PATH with the path to your EC2_USER's private key (e.g. ~/.ssh/ec2_key_pair.pem)"
     exit 1
   fi
 }
