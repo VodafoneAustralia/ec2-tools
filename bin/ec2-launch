@@ -37,7 +37,7 @@ instance_type = EC2Tools::EC2::DEFAULT_INSTANCE_TYPE
 security_groups = []
 key_pair = nil
 duration = nil
-no_obsolete = false
+obsolete_duplicates = true
 
 begin
   opts.each do |opt, arg|
@@ -54,7 +54,7 @@ begin
       when "--duration"
         duration = arg
       when "--no-obsolete"
-        no_obsolete = true
+        obsolete_duplicates = false
     end
   end
 rescue GetoptLong::Error => e
@@ -70,7 +70,8 @@ end
 ami_name = ARGV[0]
 hostname = ARGV[1]
 
-if EC2Tools::EC2::list_instances(EC2Tools::EC2::STATE_CODES[:running], /^#{hostname}$/).count == 0
+instance_count = EC2Tools::EC2::list_instances(EC2Tools::EC2::STATE_CODES[:running], /^#{hostname}$/).count
+if instance_count == 0 or obsolete_duplicates
   EC2Tools::EC2::launch_instance(key_pair, instance_type, security_groups, duration, ami_name, hostname)
 else
   puts "An instance with hostname #{hostname} is already running, and you specified --no-obsolete"
