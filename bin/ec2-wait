@@ -1,0 +1,75 @@
+#!/usr/bin/env ruby
+
+# Copyright (c) 2012 DiUS Computing Pty Ltd
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all copies or substantial 
+# portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+# TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+# CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+$: << File.expand_path("../../lib", __FILE__)
+
+require 'rubygems'
+require 'getoptlong'
+require 'ec2_tools'
+
+USAGE = "Usage: ec2-wait p PORT NAME"
+
+opts = GetoptLong.new(
+    [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
+    [ "--port",	"-p", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--timeout",	"-t", GetoptLong::REQUIRED_ARGUMENT ]
+)
+
+port = nil
+timeout = 120
+
+begin
+  opts.each do |opt, arg|
+    case opt
+      when "--help"
+        puts USAGE
+        exit 0
+      when "--port"
+        port = arg
+      when "--timeout"
+        timeout = arg
+    end
+  end
+rescue GetoptLong::Error => e
+  puts USAGE
+  exit 1
+end
+
+unless port and ARGV.length > 0
+  puts USAGE
+  exit 1
+end
+
+name = ARGV[0]
+
+instances = EC2Tools::EC2::list_instances(EC2Tools::EC2::STATE_CODES[:not_terminated], /^#{name}$/)
+if instances.count != 1
+  $stderr.puts "No unique instance with name #{name}"
+  exit 2
+end
+
+puts "Waiting for port #{port} on host #{instances.first.dns_name}"
+begin
+  EC2Tools::wait_for_port(instances.first.dns_name, port, timeout.to_i)
+rescue TimeoutError
+  $stderr.puts "Timed out waiting for port #{port}"
+  exit 2
+end
+
+puts "Port #{port} is alive"
+
