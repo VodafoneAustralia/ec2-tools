@@ -73,13 +73,13 @@ get_instance_address() {
 wait_for_state() {
   set +e
   instance_id=$1
-  state=$2
+  expected_state=$2
 
-  echo "Waiting for instance $instance_id to enter $state state"
+  echo "Waiting for instance $instance_id to enter $expected_state state"
   matched=1
   while [ $matched == 1 ]; do
     $EC2_DESCRIBE_CMD $instance_id > $DESCRIBE_FILE
-    grep $state $DESCRIBE_FILE > /dev/null
+    grep $expected_state $DESCRIBE_FILE > /dev/null
     matched=$?        
     echo -n "."
   done
