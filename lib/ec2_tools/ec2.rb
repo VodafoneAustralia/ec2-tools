@@ -27,6 +27,7 @@ module EC2Tools
     EC2_SSH_KEY_PATH = ENV['EC2_SSH_KEY_PATH']
     SSH_OPTS = { :keys => [EC2_SSH_KEY_PATH], :keys_only => true, :paranoid => false }
     DEFAULT_INSTANCE_TYPE = "t1.micro"
+    DEFAULT_BLOCK_SIZE = 100
     STATE_CODES = {
       :pending => [0],
       :running => [16],
@@ -57,7 +58,7 @@ module EC2Tools
       amis.take(amis.count - 1)
     end
 
-    def self.launch_instance(key_pair, instance_type, security_groups, duration, ami_name, hostname)
+    def self.launch_instance(key_pair, instance_type, security_groups, duration, ami_name, hostname, block_size)
       short_hostname = hostname.split('.').first
 
       ami = latest_ami_by_name(ami_name)
@@ -70,7 +71,7 @@ module EC2Tools
         :image_id => ami.id,
         :key_name => key_pair,
         :instance_type => instance_type,
-        :block_device_mappings => { "/dev/sda1" => { :volume_size => 100 } },
+        :block_device_mappings => { "/dev/sda1" => { :volume_size => block_size.to_i } },
         :security_groups => security_groups
       }
 

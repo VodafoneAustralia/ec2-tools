@@ -22,7 +22,7 @@ require 'rubygems'
 require 'getoptlong'
 require 'ec2_tools'
 
-USAGE = "Usage: ec2-launch -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] [ -d DURATION ] AMI_NAME HOSTNAME"
+USAGE = "Usage: ec2-launch -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] [ -d DURATION ] [ -b BLOCK_SIZE ] AMI_NAME HOSTNAME"
 
 opts = GetoptLong.new(
     [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
@@ -30,10 +30,12 @@ opts = GetoptLong.new(
     [ "--type",	"-t", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--group",	"-g", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--duration",	"-d", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--block-size", "-b", GetoptLong::REQUIRED_ARGUMENT ],
     [ "--no-obsolete",	"-O", GetoptLong::NO_ARGUMENT ]
 )
 
 instance_type = EC2Tools::EC2::DEFAULT_INSTANCE_TYPE
+block_size = EC2Tools::EC2::DEFAULT_BLOCK_SIZE
 security_groups = []
 key_pair = nil
 duration = nil
@@ -55,6 +57,8 @@ begin
         duration = arg
       when "--no-obsolete"
         obsolete_duplicates = false
+      when "--block-size"
+        block_size = arg
     end
   end
 rescue GetoptLong::Error => e
@@ -72,7 +76,7 @@ hostname = ARGV[1]
 
 instance_count = EC2Tools::EC2::list_instances(EC2Tools::EC2::STATE_CODES[:running], /^#{hostname}$/).count
 if instance_count == 0 or obsolete_duplicates
-  EC2Tools::EC2::launch_instance(key_pair, instance_type, security_groups, duration, ami_name, hostname)
+  EC2Tools::EC2::launch_instance(key_pair, instance_type, security_groups, duration, ami_name, hostname, block_size)
 else
   puts "An instance with hostname #{hostname} is already running, and you specified --no-obsolete"
 end
