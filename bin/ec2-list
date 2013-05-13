@@ -42,7 +42,7 @@ def field_status(instance)
 end
 
 def field_ssh_host_key(instance)
-  cmd = "ssh-keyscan -H #{instance.dns_name}"
+  cmd = "ssh-keyscan -t rsa,ecdsa -H #{instance.dns_name}"
   output, err, status = Open3.capture3(cmd)
   $stderr.puts(err) if !err.empty?
   raise "Call to '#{cmd}' failed" if !status.success?
