@@ -20,16 +20,43 @@ $: << File.expand_path("../../lib", __FILE__)
 
 require 'rubygems'
 require 'getoptlong'
+require 'open3'
 require 'ec2_tools'
 
-USAGE = "Usage: ec2 list [ -s STATE ] [ PATTERN ]\nWhere STATE is one of pending, running, stopped, not_terminated, any"
+USAGE = "Usage: ec2 list [ -s STATE ] [ -o OUTPUT_FIELDS ] [ PATTERN ]\nWhere STATE is one of pending, running, stopped, not_terminated, any"
+
+def field_id(instance)
+  instance.id
+end
+
+def field_name(instance)
+  instance.tags.Name
+end
+
+def field_dns_name(instance)
+  instance.dns_name
+end
+
+def field_status(instance)
+  instance.status
+end
+
+def field_ssh_host_key(instance)
+  cmd = "ssh-keyscan -H #{instance.dns_name}"
+  output, err, status = Open3.capture3(cmd)
+  $stderr.puts(err) if !err.empty?
+  raise "Call to '#{cmd}' failed" if !status.success?
+  output
+end
 
 opts = GetoptLong.new(
     [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
-    [ "--state",	"-s", GetoptLong::REQUIRED_ARGUMENT ]
+    [ "--state",	"-s", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--output-fields",	"-o", GetoptLong::REQUIRED_ARGUMENT ]
 )
 
 state_codes = EC2Tools::EC2::STATE_CODES[:any]
+output_fields = ["ID", "NAME", "DNS_NAME", "STATUS"]
 
 begin
   opts.each do |opt, arg|
@@ -43,6 +70,8 @@ begin
           puts "Unknown state: #{arg}"
           exit 1
         end
+      when "--output-fields"
+        output_fields = arg.split(",")
     end
   end
 rescue GetoptLong::Error => e
@@ -56,6 +85,25 @@ else
   instances = EC2Tools::EC2::list_instances(state_codes, /#{ARGV[0]}/)
 end
 
+output_fields = output_fields.select do |field|
+  method_name = "field_#{field.downcase}"
+  if respond_to?(method_name, true)
+    true
+  else
+    $stderr.puts "Excluding unsupported output field: #{field}"
+    false
+  end
+end
+
+if output_fields.length == 0
+  $stderr.puts "No valid output fields"
+  exit 2
+end
+
 instances.each do |instance|
-  puts "#{instance.id}\t#{instance.tags.Name}\t#{instance.dns_name}\t#{instance.status}"
+  outputs = []
+  output_fields.each do |field|
+    outputs.push(send("field_#{field.downcase}", instance))
+  end
+  puts outputs.join("\t")
 end
