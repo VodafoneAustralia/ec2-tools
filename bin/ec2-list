@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env ruby
 
 # Copyright (c) 2012 DiUS Computing Pty Ltd
 
@@ -16,49 +16,94 @@
 # CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-DESCRIBE_FILE=/tmp/ec2_describe.out
-RESULT_FILE=/tmp/ec2_result.out
-CODE_RUNNING=16
+$: << File.expand_path("../../lib", __FILE__)
 
-. $(dirname $0)/functions
+require 'rubygems'
+require 'getoptlong'
+require 'open3'
+require 'ec2_tools'
 
-usage() {
-  echo "Usage: $0 [ -s STATE ] [ PATTERN ]"
-}
+USAGE = "Usage: ec2 list [ -s STATE ] [ -o OUTPUT_FIELDS ] [ PATTERN ]\nWhere STATE is one of pending, running, stopped, not_terminated, any"
 
-while getopts "hs:" opt; do
-    case $opt in
-      h)
-        usage
-        exit 0
-        ;;
-      s)
-        state=$OPTARG;;
-      \?)
-        usage
-        exit 1
-        ;;
-    esac
-done
-shift $((OPTIND - 1))
+def field_id(instance)
+  instance.id
+end
 
-if [ $# == 0 ]; then 
-  PATTERN=".*"
+def field_name(instance)
+  instance.tags.Name
+end
+
+def field_dns_name(instance)
+  instance.dns_name
+end
+
+def field_status(instance)
+  instance.status
+end
+
+def field_ssh_host_key(instance)
+  cmd = "ssh-keyscan -t rsa,ecdsa -H #{instance.dns_name}"
+  output, err, status = Open3.capture3(cmd)
+  $stderr.puts(err) if !err.empty?
+  raise "Call to '#{cmd}' failed" if !status.success?
+  output
+end
+
+opts = GetoptLong.new(
+    [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
+    [ "--state",	"-s", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--output-fields",	"-o", GetoptLong::REQUIRED_ARGUMENT ]
+)
+
+state_codes = EC2Tools::EC2::STATE_CODES[:any]
+output_fields = ["ID", "NAME", "DNS_NAME", "STATUS"]
+
+begin
+  opts.each do |opt, arg|
+    case opt
+      when "--help"
+        puts USAGE
+        exit
+      when "--state"
+        state_codes = EC2Tools::EC2::STATE_CODES[arg.downcase.to_sym]
+        if !state_codes
+          puts "Unknown state: #{arg}"
+          exit 1
+        end
+      when "--output-fields"
+        output_fields = arg.split(",")
+    end
+  end
+rescue GetoptLong::Error => e
+  puts USAGE
+  exit 1
+end
+
+if ARGV.count == 0
+  instances = EC2Tools::EC2::list_instances(state_codes, /.*/)
 else
-  PATTERN=$1
-fi
+  instances = EC2Tools::EC2::list_instances(state_codes, /#{ARGV[0]}/)
+end
 
-DESCRIBE_CMD=$EC2_DESCRIBE_CMD
-if [ -n "$state" ]; then
-   DESCRIBE_CMD="$DESCRIBE_CMD --filter instance-state-code=$state"
-fi
+output_fields = output_fields.select do |field|
+  method_name = "field_#{field.downcase}"
+  if respond_to?(method_name, true)
+    true
+  else
+    $stderr.puts "Excluding unsupported output field: #{field}"
+    false
+  end
+end
 
-$DESCRIBE_CMD > $DESCRIBE_FILE
-awk '/^TAG.*Name\t'"$PATTERN"'$/ { print $3, $5 }' $DESCRIBE_FILE > $RESULT_FILE
-
-cat $RESULT_FILE
-if [ $(wc -l $RESULT_FILE | awk '{ print $1 }') != 0 ]; then
-  exit 0
-else
+if output_fields.length == 0
+  $stderr.puts "No valid output fields"
   exit 2
-fi
+end
+
+instances.each do |instance|
+  outputs = []
+  output_fields.each do |field|
+    outputs.push(send("field_#{field.downcase}", instance))
+  end
+  puts outputs.join("\t")
+end

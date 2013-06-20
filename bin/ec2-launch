@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env ruby
 
 # Copyright (c) 2012 DiUS Computing Pty Ltd
 
@@ -16,90 +16,67 @@
 # CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-USERDATA_FILE=/tmp/ec2.userdata
-LAUNCH_FILE=/tmp/ec2_launch.out
-DESCRIBE_FILE=/tmp/ec2_describe.out
+$: << File.expand_path("../../lib", __FILE__)
 
-DEFAULT_INSTANCE_TYPE="t1.micro"
+require 'rubygems'
+require 'getoptlong'
+require 'ec2_tools'
 
-. $(dirname $0)/functions
+USAGE = "Usage: ec2-launch -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] [ -d DURATION ] [ -b BLOCK_SIZE ] AMI_NAME HOSTNAME"
 
-usage() {
-  echo "Usage: $0 -k KEY_PAIR [ -t TYPE] [ -g GROUP,... ]] AMI HOSTNAME"
-}
+opts = GetoptLong.new(
+    [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
+    [ "--key-pair",	"-k", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--type",	"-t", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--group",	"-g", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--duration",	"-d", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--block-size", "-b", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--no-obsolete",	"-O", GetoptLong::NO_ARGUMENT ]
+)
 
-write_userdata() {
-cat <<-EOF > $USERDATA_FILE
-  #!/bin/bash
+instance_type = EC2Tools::EC2::DEFAULT_INSTANCE_TYPE
+block_size = EC2Tools::EC2::DEFAULT_BLOCK_SIZE
+security_groups = []
+key_pair = nil
+duration = nil
+obsolete_duplicates = true
 
-  set -xeu
-
-  hostname $hostname
-  echo "$hostname" > /etc/hostname
-
-  awk '!/127\.0\.0\.1|127\.0\.1\.1/' /etc/hosts > /tmp/hosts
-  echo "127.0.0.1 $hostname $hostname" > /etc/hosts
-  cat /tmp/hosts >> /etc/hosts
-EOF
-}
-
-launch_instance() {
-  ec2_command="$EC2_RUN_CMD $ami \
-    -t $instance_type \
-    -b /dev/sda1=:100 \
-    -k $key_pair \
-    -f $USERDATA_FILE"
-
-  groups=$(echo $groups | tr , " ")
-  for group in $groups; do
-    ec2_command="$ec2_command -g $group"
-  done
-
-  $ec2_command > $LAUNCH_FILE
-  ec2_instance_id=$(awk '/INSTANCE/ { print $2 }' $LAUNCH_FILE)
-}
-
-instance_type=$DEFAULT_INSTANCE_TYPE
-
-while getopts "ht:k:g:" opt; do
-    case $opt in
-      h)
-        usage
+begin
+  opts.each do |opt, arg|
+    case opt
+      when "--help"
+        puts USAGE
         exit 0
-        ;;
-      t)
-        instance_type=$OPTARG;;
-      k)
-        key_pair=$OPTARG;;
-      g)
-        groups=$OPTARG;;
-      \?)
-        usage
-        exit 1
-        ;;
-    esac
-done
-shift $((OPTIND - 1))
+      when "--key-pair"
+        key_pair = arg
+      when "--type"
+        instance_type = arg
+      when "--group"
+        security_groups = arg.split(',')
+      when "--duration"
+        duration = arg
+      when "--no-obsolete"
+        obsolete_duplicates = false
+      when "--block-size"
+        block_size = arg
+    end
+  end
+rescue GetoptLong::Error => e
+  puts USAGE
+  exit 1
+end
 
-if [ -z $key_pair ]; then usage; exit 1; fi
-if [ $# != 2 ]; then usage; exit 1; fi
+unless key_pair and ARGV.length == 2
+  puts USAGE
+  exit 1
+end
 
-ami=$1
-fqdn=$2
-hostname=$(echo $fqdn | cut -f 1 -d .)
+ami_name = ARGV[0]
+hostname = ARGV[1]
 
-write_userdata
-
-echo "Launching instance with hostname $fqdn from AMI $ami"
-
-launch_instance
-
-echo "EC2 Instance ID: $ec2_instance_id"
-
-get_instance_address $ec2_instance_id
-
-echo "EC2 IP Address: $ec2_ip_address"
-echo "EC2 Hostname: $ec2_hostname"
-echo "Tagged Hostname: $fqdn"
-
-$(dirname $0)/ec2-name -d $ec2_instance_id $fqdn
+instance_count = EC2Tools::EC2::list_instances(EC2Tools::EC2::STATE_CODES[:running], /^#{hostname}$/).count
+if instance_count == 0 or obsolete_duplicates
+  EC2Tools::EC2::launch_instance(key_pair, instance_type, security_groups, duration, ami_name, hostname, block_size)
+else
+  puts "An instance with hostname #{hostname} is already running, and you specified --no-obsolete"
+end

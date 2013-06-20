@@ -20,14 +20,18 @@ $: << File.expand_path("../../lib", __FILE__)
 
 require 'rubygems'
 require 'getoptlong'
-require 'aws'
 require 'ec2_tools'
 
-USAGE = "Usage: ec2-name INSTANCE_ID [ HOSTNAME ]"
+USAGE = "Usage: ec2-wait p PORT NAME"
 
 opts = GetoptLong.new(
     [ "--help",	"-h", GetoptLong::NO_ARGUMENT ],
+    [ "--port",	"-p", GetoptLong::REQUIRED_ARGUMENT ],
+    [ "--timeout",	"-t", GetoptLong::REQUIRED_ARGUMENT ]
 )
+
+port = nil
+timeout = 120
 
 begin
   opts.each do |opt, arg|
@@ -35,6 +39,10 @@ begin
       when "--help"
         puts USAGE
         exit 0
+      when "--port"
+        port = arg
+      when "--timeout"
+        timeout = arg
     end
   end
 rescue GetoptLong::Error => e
@@ -42,21 +50,26 @@ rescue GetoptLong::Error => e
   exit 1
 end
 
-unless ARGV.length > 0
+unless port and ARGV.length > 0
   puts USAGE
   exit 1
 end
 
-instance = EC2Tools::EC2::ec2.instances[ARGV[0]]
+name = ARGV[0]
 
-if ARGV.count > 1
-  hostname = ARGV[1]
-else
-  hostname = instance.tags.Name
-  if !hostname || hostname.length == 0
-    puts "Instance #{instance.id} has no Name tag and you didn't specify a hostname"
-    exit 1
-  end
+instances = EC2Tools::EC2::list_instances(EC2Tools::EC2::STATE_CODES[:not_terminated], /^#{name}$/)
+if instances.count != 1
+  $stderr.puts "No unique instance with name #{name}"
+  exit 2
 end
 
-EC2Tools::EC2::name_instance(instance, hostname)
+puts "Waiting for port #{port} on host #{instances.first.dns_name}"
+begin
+  EC2Tools::wait_for_port(instances.first.dns_name, port, timeout.to_i)
+rescue TimeoutError
+  $stderr.puts "Timed out waiting for port #{port}"
+  exit 2
+end
+
+puts "Port #{port} is alive"
+

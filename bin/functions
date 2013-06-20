@@ -22,13 +22,13 @@ export EC2_TAG_CMD="$EC2_HOME/bin/ec2-create-tags"
 
 DESCRIBE_FILE=/tmp/ec2_describe.out
 
-check_environment() {
+check_mandatory_environment() {
   if [ -z "$(which ruby)" ]; then
     echo "Please ensure ruby 1.9.3 or greater is installed and in your PATH"
   fi
   
   if [ -z "$AWS_ACCESS_KEY" -o -z "$AWS_SECRET_KEY" ]; then
-    echo "Please set both AWS_ACCESS_KEY and AWS_SECRET_KEY"
+    echo "Please set AWS_ACCESS_KEY and AWS_SECRET_KEY"
     exit 1
   fi
 
@@ -48,27 +48,42 @@ check_environment() {
   fi
 }
 
+check_ssh_environment() {
+  if [ -z "$EC2_SSH_USER" ]; then
+    echo "Please set EC2_SSH_USER with a username that can connect to your instances via SSH"
+    exit 1
+  fi
+
+  if [ -z "$EC2_SSH_KEY_PATH" ]; then
+    echo "Please set EC2_SSH_KEY_PATH with the path to your EC2_USER's private key (e.g. ~/.ssh/ec2_key_pair.pem)"
+    exit 1
+  fi
+}
+
 get_instance_address() {
-  set +e
   if [ $# != 1 ]; then echo "get_instance_address() expects instance ID as argument"; exit 1; fi
   instance_id=$1
 
-  pending=0
-  while [ $pending == 0 ]; do
-    $EC2_DESCRIBE_CMD $ec2_instance_id > $DESCRIBE_FILE
-    grep pending $DESCRIBE_FILE > /dev/null
-    pending=$?        
-  done
-  
-  grep running $DESCRIBE_FILE > /dev/null
-  if [ $? != 0 ]; then
-    echo "Instance $instance_id isn't running or pending"
-    exit 1
-  fi
-  
-  set -e
+  wait_for_state $instance_id running
 
   ec2_ip_address=$(awk '/INSTANCE/ { print $14 }' $DESCRIBE_FILE)
   ec2_hostname=$(awk '/INSTANCE/ { print $4 }' $DESCRIBE_FILE)
 }
 
+wait_for_state() {
+  set +e
+  instance_id=$1
+  expected_state=$2
+
+  echo "Waiting for instance $instance_id to enter $expected_state state"
+  matched=1
+  while [ $matched == 1 ]; do
+    $EC2_DESCRIBE_CMD $instance_id > $DESCRIBE_FILE
+    grep $expected_state $DESCRIBE_FILE > /dev/null
+    matched=$?        
+    echo -n "."
+  done
+  
+  echo ""  
+  set -e
+}
