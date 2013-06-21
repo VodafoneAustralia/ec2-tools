@@ -87,9 +87,9 @@ module EC2Tools
       puts "Waiting for instance to transition to running state"
 
       begin
-        wait_for_instance_state(instance, :running, 500)
+        wait_for_instance_state(instance, :running)
       rescue Timeout::Error
-        puts "Timed out waiting for instance to transition to running state"
+        puts "Timed out waiting for instance to transition to #{state} state"
         exit 1
       end
 
